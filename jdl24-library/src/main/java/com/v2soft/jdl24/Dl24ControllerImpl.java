@@ -1,18 +1,19 @@
 package com.v2soft.jdl24;
 
-import com.fazecast.jSerialComm.SerialPort;
-
 import java.util.HexFormat;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Dl24ControllerImpl implements Dl24Controller {
-    private SerialPort portObj;
+public class Dl24ControllerImpl implements Dl24Controller, Source.Listener {
+    private final Source source;
     private final int CURRENT_SCALE = 100;
     private final int VOLTAGE_SCALE = 100;
     protected final byte MAGIC_B1 = (byte) 0xFF;
     protected final byte MAGIC_B2 = 0x55;
-    private Thread worker = null;
-    private AtomicBoolean stopFlag = new AtomicBoolean(false);
+    private final byte[] rxBuffer = new byte[256];
+    private int rxOffset = 0;
+
+    public Dl24ControllerImpl(Source source) {
+        this.source = source;
+    }
 
     public byte calculateChecksum(byte[] packet) {
         if (packet.length != 10) {
@@ -27,35 +28,17 @@ public class Dl24ControllerImpl implements Dl24Controller {
     }
 
     @Override
-    public boolean connect(String port) {
-        portObj = SerialPort.getCommPort(port);
-        portObj.setBaudRate(9600);
-        portObj.setNumDataBits(8);
-        portObj.setNumStopBits(1);
-        portObj.setParity(SerialPort.NO_PARITY);
-
-        if (!portObj.openPort()) {
-            System.out.println("Failed to open port");
-            return false;
-        }
-        stopFlag.set(false);
-        worker = new Thread(this::workerFunction);
-        worker.start();
-        return true;
+    public boolean connect() {
+        source.setListener(this);
+        rxOffset = 0;
+        return source.open(new Source.UartConfig());
     }
 
     @Override
     public boolean disconnect() throws InterruptedException {
-        if (worker != null) {
-            stopFlag.set(true);
-            worker.join();
-            worker = null;
-        }
-        if (portObj != null) {
-            portObj.closePort();
-            portObj = null;
-        }
-        return false;
+        boolean result = source.close();
+        source.setListener(null);
+        return result;
     }
 
     @Override
@@ -130,31 +113,18 @@ public class Dl24ControllerImpl implements Dl24Controller {
     }
 
     private boolean sendCommand(byte[] command) {
-        portObj.writeBytes(command, command.length);
-        return true;
+        return source.write(command);
     }
 
-    private void workerFunction() {
-        var buffer = new byte[256];
-        int offset = 0;
-        while (!stopFlag.get()) {
-            // check serial port
-            if (portObj.bytesAvailable() > 0) {
-                System.out.println("Read to " + offset);
-                int read = portObj.readBytes(buffer, buffer.length - offset, offset);
-                offset += read;
-                System.out.println("After read capacity " + offset + " read=" + read);
-                if (offset > 0) {
-                    offset = handleData(buffer, offset);
-                    System.out.println("After handle capacity=" + offset);
-                }
-            } else {
-                try {
-                    Thread.sleep(20);
-                } catch (Exception err) {
-                    // nothing to do
-                }
-            }
+    @Override
+    public void onDataReceived(byte[] data, int size) {
+        // Append the freshly read bytes to the accumulation buffer, then let
+        // handleData() realign to the magic-byte frame boundary.
+        int copy = Math.min(size, rxBuffer.length - rxOffset);
+        System.arraycopy(data, 0, rxBuffer, rxOffset, copy);
+        rxOffset += copy;
+        if (rxOffset > 0) {
+            rxOffset = handleData(rxBuffer, rxOffset);
         }
     }
 

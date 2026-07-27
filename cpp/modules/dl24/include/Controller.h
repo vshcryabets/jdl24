@@ -1,0 +1,70 @@
+#pragma once
+
+#include <cstdint>
+
+#include "Source.h"
+
+namespace dl24 {
+
+/**
+ * Abstract DL24 electronic-load controller.
+ *
+ * Encapsulates the DL24 command protocol (connect, configure, start/stop,
+ * counters) on top of a UART Source. Concrete implementations build the command
+ * packets and talk to the device through a Source instance.
+ *
+ * Mirrors the Java `com.v2soft.jdl24.Dl24Controller` interface.
+ *
+ * A Controller drives a stateful device connection, therefore it is
+ * non-copyable.
+ */
+class Controller {
+public:
+    virtual ~Controller() = default;
+
+    /**
+     * Open the connection to the device using the injected Source.
+     * @return true on success.
+     */
+    virtual bool connect() = 0;
+
+    /**
+     * Close the connection to the device and stop any background processing.
+     * @return true on success.
+     */
+    virtual bool disconnect() = 0;
+
+    /** Set the target load current in amperes. @return true on success. */
+    virtual bool setCurrent(float current) = 0;
+
+    /** Set the target/cutoff voltage in volts. @return true on success. */
+    virtual bool setVoltage(float voltage) = 0;
+
+    /** Set the timer in seconds. @return true on success. */
+    virtual bool setTimer(int32_t timer) = 0;
+
+    /** Start the load. @return true on success. */
+    virtual bool start() = 0;
+
+    /** Stop the load. @return true on success. */
+    virtual bool stop() = 0;
+
+    /** Reset all accumulated counters (capacity, energy, time). @return true on success. */
+    virtual bool resetCounters() = 0;
+
+protected:
+    /**
+     * @param source UART transport used to talk to the device. The Controller
+     *               stores a reference to it; the Source must outlive the
+     *               Controller.
+     */
+    explicit Controller(Source& source) : source(source) {}
+
+    Controller(const Controller&) = delete;
+    Controller& operator=(const Controller&) = delete;
+
+    /** UART transport used by concrete implementations. */
+    Source& source;
+};
+
+} // namespace dl24

@@ -6,7 +6,8 @@ import org.junit.jupiter.api.Test;
 public class Dl24ControllerImplTest {
     @Test
     void testPacketHandler() {
-        Dl24ControllerImpl impl = new Dl24ControllerImpl();
+        // handleData() does not touch the Source, so a null source is fine here.
+        Dl24ControllerImpl impl = new Dl24ControllerImpl(null);
         var buffer = new byte[]{0x12, (byte) 0xFF, 0x55};
         int newOffset = impl.handleData(buffer, 3);
         Assertions.assertEquals(2, newOffset);
