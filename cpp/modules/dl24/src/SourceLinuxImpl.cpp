@@ -97,6 +97,7 @@ Source::Result SourceLinuxImpl::write(const uint8_t* data, BufferSize_t size) {
     size_t total = 0;
 
     // Debug: dump data to stdout in hex
+    std::cout << "Writing " << size << " bytes: ";
     for (BufferSize_t i = 0; i < size; ++i) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') 
                   << static_cast<int>(data[i]) << " ";
@@ -151,6 +152,7 @@ void SourceLinuxImpl::workerLoop() {
         if (fds[0].revents & POLLIN) {
             ssize_t n = ::read(fd_, buffer, sizeof(buffer));
             if (n > 0) {
+                std::cout << "Received " << n << " bytes: ";
                 // Debug: dump data to stdout in hex
                 for (BufferSize_t i = 0; i < n; ++i) {
                     std::cout << std::hex << std::setw(2) << std::setfill('0') 

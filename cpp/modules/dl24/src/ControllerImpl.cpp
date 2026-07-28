@@ -1,5 +1,8 @@
 #include "ControllerImpl.h"
 
+#include <iostream>
+#include <iomanip>
+
 namespace dl24 {
 
 // DL24 command codes (see Java CommandsEnum).
@@ -139,17 +142,9 @@ void ControllerImpl::onDataReceived(const uint8_t* data, BufferSize_t size) {
 
 void ControllerImpl::parseCollector() {
     while (true) {
-        // 1. Align the collector to the next answer start (FF 55).
-        std::size_t start = 0;
-        bool found = false;
-        for (std::size_t i = 0; i + 1 < collector_.size(); ++i) {
-            if (collector_[i] == MAGIC_B1 && collector_[i + 1] == MAGIC_B2) {
-                start = i;
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
+        // 1. Align the collector to the first answer start (FF 55).
+        std::size_t first = findFrameStart(0);
+        if (first == collector_.size()) {
             // No frame start yet. Drop leading garbage, but keep a trailing FF
             // in case the matching 55 arrives in the next chunk.
             if (!collector_.empty() && collector_.back() == MAGIC_B1) {
@@ -159,33 +154,34 @@ void ControllerImpl::parseCollector() {
             }
             return;
         }
-        if (start > 0) {
+        if (first > 0) {
             // Discard bytes before the frame start.
             collector_.erase(collector_.begin(),
-                             collector_.begin() + static_cast<std::ptrdiff_t>(start));
+                             collector_.begin() + static_cast<std::ptrdiff_t>(first));
         }
 
-        // 2. Do we have a complete answer at the front yet?
-        std::size_t length = answerLength(collector_.data(), collector_.size());
-        if (length == 0 || length > collector_.size()) {
-            return;  // wait for more bytes
+        // 2. The answer ends where the next one begins. Without the following
+        //    FF 55 we can't know the current answer is complete yet.
+        std::size_t next = findFrameStart(2);
+        if (next == collector_.size()) {
+            return;  // wait for the next periodic packet
         }
 
-        // 3. Deliver the complete answer, then remove it from the collector.
-        onAnswer(collector_.data(), length);
+        // 3. Deliver [0, next) as one complete answer, then remove it; the loop
+        //    continues from the FF 55 that now sits at the front.
+        onAnswer(collector_.data(), next);
         collector_.erase(collector_.begin(),
-                         collector_.begin() + static_cast<std::ptrdiff_t>(length));
+                         collector_.begin() + static_cast<std::ptrdiff_t>(next));
     }
 }
 
-std::size_t ControllerImpl::answerLength(const uint8_t* buffer, std::size_t available) const {
-    // TODO: derive the real DL24 answer length from the frame header once the
-    // answer wire format is known. For now a fixed-size frame is assumed.
-    (void) buffer;
-    if (available < kAnswerSize) {
-        return 0;
+std::size_t ControllerImpl::findFrameStart(std::size_t from) const {
+    for (std::size_t i = from; i + 1 < collector_.size(); ++i) {
+        if (collector_[i] == MAGIC_B1 && collector_[i + 1] == MAGIC_B2) {
+            return i;
+        }
     }
-    return kAnswerSize;
+    return collector_.size();  // not found
 }
 
 void ControllerImpl::onAnswer(const uint8_t* answer, std::size_t length) {
@@ -196,6 +192,13 @@ void ControllerImpl::onAnswer(const uint8_t* answer, std::size_t length) {
         // TODO: route unsolicited status frames (decode into a Dl24Status).
         return;
     }
+    std::cout << "onAnswer size=" << length << ": ";
+    for (std::size_t i = 0; i < length; ++i) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(answer[i]) << " ";
+    }
+    std::cout << std::dec << std::endl;
+
+
     lastAnswer_.assign(answer, answer + length);
     answerReceived_ = true;
     waitingForAnswer_ = false;

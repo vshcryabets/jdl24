@@ -41,24 +41,21 @@ protected:
     static uint8_t calculateChecksum(const uint8_t* packet, BufferSize_t size);
 
     /**
-     * Determine the length of the complete answer that starts at the front of
-     * @p buffer (guaranteed to begin with FF 55).
-     *
-     * @param available number of bytes currently at the front of the buffer.
-     * @return the total answer length in bytes, or 0 if not enough bytes have
-     *         arrived yet to determine/complete the answer.
-     */
-    virtual std::size_t answerLength(const uint8_t* buffer, std::size_t available) const;
-
-    /**
      * Called once for each complete answer frame extracted from the collector.
      * @p answer begins with FF 55 and is @p length bytes long.
      */
     virtual void onAnswer(const uint8_t* answer, std::size_t length);
 
 private:
-    // Scan the collector for complete answers, delivering and removing each.
+    // Extract complete answers from the collector, delivering and removing each.
+    // The device streams answers periodically, so an answer runs from its FF 55
+    // header up to (but not including) the next FF 55 header; the trailing,
+    // not-yet-terminated answer stays buffered until the next header arrives.
     void parseCollector();
+
+    // Index of the next FF 55 header at or after @p from, or collector_.size()
+    // if none is present.
+    std::size_t findFrameStart(std::size_t from) const;
 
     // Low-level fire-and-forget write of a command packet.
     bool sendCommand(const uint8_t* command, BufferSize_t size);
@@ -76,11 +73,6 @@ private:
 
     static constexpr uint8_t MAGIC_B1 = 0xFF;
     static constexpr uint8_t MAGIC_B2 = 0x55;
-
-    // Provisional DL24 answer length. TODO: replace with the real frame size
-    // (or a length derived from the frame header) once the answer wire format
-    // is known; this is the single place that decides answer boundaries.
-    static constexpr std::size_t kAnswerSize = 10;
 
     // How long a command waits for its answer before giving up.
     static constexpr std::chrono::milliseconds kResponseTimeout{1000};
