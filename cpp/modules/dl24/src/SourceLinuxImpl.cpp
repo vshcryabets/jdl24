@@ -4,6 +4,8 @@
 
 #include <cerrno>
 #include <cstdint>
+#include <iomanip>
+#include <iostream>
 #include <utility>
 
 #include <fcntl.h>
@@ -93,6 +95,14 @@ Source::Result SourceLinuxImpl::write(const uint8_t* data, BufferSize_t size) {
         return Result::NotOpen;
     }
     size_t total = 0;
+
+    // Debug: dump data to stdout in hex
+    for (BufferSize_t i = 0; i < size; ++i) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') 
+                  << static_cast<int>(data[i]) << " ";
+    }
+    std::cout << std::dec << std::endl;
+    
     while (total < size) {
         ssize_t n = ::write(fd_, data + total, size - total);
         if (n < 0) {
@@ -141,6 +151,13 @@ void SourceLinuxImpl::workerLoop() {
         if (fds[0].revents & POLLIN) {
             ssize_t n = ::read(fd_, buffer, sizeof(buffer));
             if (n > 0) {
+                // Debug: dump data to stdout in hex
+                for (BufferSize_t i = 0; i < n; ++i) {
+                    std::cout << std::hex << std::setw(2) << std::setfill('0') 
+                            << static_cast<int>(buffer[i]) << " ";
+                }
+                std::cout << std::dec << std::endl;
+                
                 Listener* l = listener_.load();
                 if (l != nullptr) {
                     l->onDataReceived(buffer, static_cast<BufferSize_t>(n));

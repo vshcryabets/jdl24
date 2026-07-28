@@ -6,6 +6,7 @@ target_sources(dl24cpp
     PRIVATE
         src/Source.cpp
         src/Controller.cpp
+        src/ControllerImpl.cpp
     )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -20,26 +21,13 @@ target_include_directories(dl24cpp PUBLIC
     )
 
 if (ENABLE_CATCH2)
-    add_executable(module_l4_tests
-        test/test_ChannelUart.cpp
+    add_executable(dl24cpp_tests
+        test/test_ControllerImpl.cpp
     )
-    if (USE_STD_MEMORY)
-        target_compile_definitions(module_l4_tests PRIVATE USE_STD_MEMORY)
-    endif()
-    if(CMAKE_CXX_STANDARD GREATER_EQUAL 23)
-        message("Build tests for C++23")
-        target_sources(module_l4_tests PRIVATE
-            test/test_ChannelUnixTcp.cpp
-            test/test_ChannelUnixPipeImpl.cpp
-        )
-        # This helps CMake provide better error messages if the compiler doesn't fully
-        # support the C++23 standard.
-        target_compile_features(module_l4_tests PRIVATE cxx_std_23)
-    endif()
-    target_include_directories(module_l4_tests PRIVATE ./include/)
-    target_link_libraries(module_l4_tests PUBLIC Catch2::Catch2WithMain module_l4)
+    target_include_directories(dl24cpp_tests PRIVATE ./include/)
+    target_link_libraries(dl24cpp_tests PUBLIC Catch2::Catch2WithMain dl24cpp)
 
-    catch_discover_tests(module_l4_tests 
+    catch_discover_tests(dl24cpp_tests 
         PROPERTIES 
         TIMEOUT 10)
 endif()
