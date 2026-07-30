@@ -188,16 +188,18 @@ void ControllerImpl::onAnswer(const uint8_t* answer, std::size_t length) {
     // Runs on the Source worker thread. Hand the answer to a command that is
     // blocked in sendCommandAndWait(); ignore unsolicited frames.
     std::lock_guard<std::mutex> lock(stateMutex_);
-    if (!waitingForAnswer_) {
-        // TODO: route unsolicited status frames (decode into a Dl24Status).
-        return;
-    }
+
     std::cout << "onAnswer size=" << length << ": ";
     for (std::size_t i = 0; i < length; ++i) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(answer[i]) << " ";
     }
     std::cout << std::dec << std::endl;
 
+
+    if (!waitingForAnswer_) {
+        // TODO: route unsolicited status frames (decode into a Dl24Status).
+        return;
+    }
 
     lastAnswer_.assign(answer, answer + length);
     answerReceived_ = true;

@@ -5,8 +5,6 @@ project(dl24 LANGUAGES C CXX)
 enable_testing()
 include(CTest)
 
-# option(BUILD_MODULE_L5 "Build the L5 module" ON)
-
 set(CPP_VERSION "23" CACHE STRING "C++ standard version to use (17 or 23)")
 set_property(CACHE CPP_VERSION PROPERTY STRINGS "17" "23")
 if(NOT CPP_VERSION STREQUAL "17" AND NOT CPP_VERSION STREQUAL "23")
@@ -16,6 +14,8 @@ set(CMAKE_CXX_STANDARD ${CPP_VERSION})
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED True)
+
+include(cmake/CPM.cmake)
 
 if (ENABLE_CATCH2)
     include(FetchContent)

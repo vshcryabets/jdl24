@@ -152,13 +152,13 @@ void SourceLinuxImpl::workerLoop() {
         if (fds[0].revents & POLLIN) {
             ssize_t n = ::read(fd_, buffer, sizeof(buffer));
             if (n > 0) {
-                std::cout << "Received " << n << " bytes: ";
-                // Debug: dump data to stdout in hex
-                for (BufferSize_t i = 0; i < n; ++i) {
-                    std::cout << std::hex << std::setw(2) << std::setfill('0') 
-                            << static_cast<int>(buffer[i]) << " ";
-                }
-                std::cout << std::dec << std::endl;
+                // std::cout << "Received " << n << " bytes: ";
+                // // Debug: dump data to stdout in hex
+                // for (BufferSize_t i = 0; i < n; ++i) {
+                //     std::cout << std::hex << std::setw(2) << std::setfill('0') 
+                //             << static_cast<int>(buffer[i]) << " ";
+                // }
+                // std::cout << std::dec << std::endl;
                 
                 Listener* l = listener_.load();
                 if (l != nullptr) {
