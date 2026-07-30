@@ -9,6 +9,7 @@ target_sources(dl24-linux-cli
     PRIVATE
         src/main.cpp
         src/SampleDl24App.cpp
+        src/viewmodel.cpp
     )
 
 target_include_directories(dl24-linux-cli PRIVATE

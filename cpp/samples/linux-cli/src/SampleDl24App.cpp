@@ -1,7 +1,5 @@
 #include "SampleDl24App.h"
 
-#include <fstream>
-#include <nlohmann/json.hpp>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -10,27 +8,24 @@
 
 using namespace ftxui;
 
-using json = nlohmann::json;
 
-SampleDl24App::SampleDl24App(): show_connect_dialog(false) {
-    loadConfiguration("dl24.conf");
+SampleDl24App::SampleDl24App() {
 }
 
 SampleDl24App::~SampleDl24App() {
-    saveConfiguration("dl24.conf");
 }
 
 ftxui::Component SampleDl24App::connectToDevice() {
-    auto input_path = Input(&config_.devicePath, "e.g. /dev/ttyUSB0 or COM3");
+    this->device_path = viewModel_.getState().device_path;
+    auto input_path = Input(&device_path, "e.g. /dev/ttyUSB0 or COM3");
     
     // Buttons for the dialog
     auto btn_connect = Button("Connect", [&] {
-        // uart_logs.push_back("Connecting to " + config_.devicePath + "...");
-        show_connect_dialog = false; // Close the dialog
+        viewModel_.onUiAction(Open(device_path));
     });
     
     auto btn_cancel = Button("Cancel", [&] {
-        show_connect_dialog = false; // Close without doing anything
+        viewModel_.onUiAction(ConnectDialogCanceled());
     });
 
     // Group the interactive dialog elements together
@@ -69,18 +64,11 @@ void SampleDl24App::run() {
     };
     int menu_selected = 0;
 
-    std::vector<std::string> uart_logs = {
-        "System booting...",
-        "UART initialized at 115200 8N1",
-        "Waiting for data...",
-    };
-
     // 2. Create the Menu Component
     MenuOption option;
     option.on_enter = [&] {
         if (menu_selected == 0) { 
-            // Connect
-            show_connect_dialog = true; // Show the connect dialog
+            viewModel_.onUiAction(OnConnectRequested());
         } else if (menu_selected == 1) { 
             // Quit
             screen.Exit();
@@ -90,10 +78,10 @@ void SampleDl24App::run() {
 
     // 3. Create the Main Layout
     // We wrap the interactive menu in a Renderer to define how the screen is drawn
-    auto layout = Renderer(menu, [&] {
+    auto layout = Renderer(menu, [&,&state = viewModel_.getState()] {
         // Build the UART log elements dynamically
         Elements log_elements;
-        for (const auto& log : uart_logs) {
+        for (const auto& log : state.uart_logs) {
             log_elements.push_back(text(log));
         }
 
@@ -115,29 +103,7 @@ void SampleDl24App::run() {
         });
     });
     ftxui::Component dialog_renderer = connectToDevice();
-    auto root = Modal(layout, dialog_renderer, &show_connect_dialog);
+    auto root = Modal(layout, dialog_renderer, &viewModel_.getState().show_connect_dialog);
     // 4. Run the application
     screen.Loop(root);
-}
-
-void SampleDl24App::loadConfiguration(std::string configFilePath) {
-    // Load configuration from file (if exists).
-    std::ifstream configFile(configFilePath);
-    if (configFile.is_open()) {
-        json configJson;
-        configFile >> configJson;
-        if (configJson.contains("devicePath")) {
-            config_.devicePath = configJson["devicePath"];
-        }
-    }
-}
-
-void SampleDl24App::saveConfiguration(std::string configFilePath) {
-    // Save configuration to file.
-    json configJson;
-    configJson["devicePath"] = config_.devicePath;
-    std::ofstream configFile(configFilePath);
-    if (configFile.is_open()) {
-        configFile << configJson.dump(4);  // Pretty print with 4 spaces indentation
-    }
 }
