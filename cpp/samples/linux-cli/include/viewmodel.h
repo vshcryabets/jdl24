@@ -31,6 +31,7 @@ struct OnLoadStop: public UiEvent {};
 struct ResetStatistics: public UiEvent {};
 struct OnExitClicked: public UiEvent {};
 struct OnSaveLogsRequested: public UiEvent {};
+struct TestActionRequested: public UiEvent {};
 struct Open: public UiEvent {
     Open(std::string path) : filepath(path), UiEvent() {}
     std::string filepath;
@@ -60,6 +61,7 @@ private:
 
     void onDebugMessage(dl24::DebugListener::Level level, const std::string& message) override;
     void saveLogs();
+    void testAction();
 public:
     ViewModel();
     virtual ~ViewModel() = default;

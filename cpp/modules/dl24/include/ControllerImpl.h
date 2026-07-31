@@ -13,6 +13,8 @@
 
 namespace dl24 {
 
+constexpr uint8_t PX100_ACK = 0x6F;  // Acknowledge byte sent by PX100 on successful command receipt
+
 /**
  * Concrete DL24 controller implementing the device command protocol on top of
  * a UART Source. Port of the Java {@code Dl24ControllerImpl}.
@@ -49,6 +51,8 @@ protected:
     virtual void onAnswer(const uint8_t* answer, std::size_t length);
 
     void sendDebugMessage(DebugListener::Level level, const std::string& message);
+    void parseReport(const uint8_t* answer, std::size_t length);
+    void parseReply(const uint8_t* answer, std::size_t length);
 
 private:
     // Extract complete answers from the collector, delivering and removing each.
@@ -78,6 +82,17 @@ private:
         BufferSize_t size
     );
 
+    /**
+     * Send a PX100 command and block until the device answers or the timeout elapses.
+     *
+     * @return the answer bytes, or std::nullopt on send failure / timeout.
+     */
+    std::expected<std::vector<uint8_t>, Error> 
+    sendPX100CommandAndWait(
+        const uint8_t* command,
+        BufferSize_t size
+    );
+
     static constexpr uint8_t MAGIC_B1 = 0xFF;
     static constexpr uint8_t MAGIC_B2 = 0x55;
 
@@ -94,6 +109,9 @@ private:
     std::condition_variable responseCv_;
     bool waitingForAnswer_ = false;
     bool answerReceived_ = false;
+    bool waitingForPx100Answer_ = false;
+    bool answerPx100Received_ = false;
+    Error replyError_ = Error::Timeout;
     std::vector<uint8_t> lastAnswer_;
     DebugListener *debugListener_ = nullptr;
 };

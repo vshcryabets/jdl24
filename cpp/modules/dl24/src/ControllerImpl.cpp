@@ -7,16 +7,31 @@
 namespace dl24 {
 
 // DL24 command codes (see Java CommandsEnum).
-enum class Command : uint8_t {
+enum class CommandPX100 : uint8_t {
     StartStop = 0x01,
     SetCurrent = 0x02,
-    SetVoltage = 0x03,
+    SetCutoffVoltage = 0x03,
+    SetTImeout = 0x04,
+    ResetCounters = 0x05,
+};
+
+enum class CommandAtorch : uint8_t {
+    ResetWh = 0x01,
+    ResetAh = 0x02,
+    ResetTime = 0x03,
     ResetAll = 0x05,
+    SetupButton = 0x31,
+    EnterButton = 0x32,
+    PlusButton = 0x33,
+    MinusButton = 0x34,
 };
 
 constexpr int VOLTAGE_SCALE = 100;
 
-constexpr uint8_t cmd(Command c) {
+constexpr uint8_t cmd(CommandAtorch c) {
+    return static_cast<uint8_t>(c);
+}
+constexpr uint8_t cmd(CommandPX100 c) {
     return static_cast<uint8_t>(c);
 }
 
@@ -42,15 +57,22 @@ Error ControllerImpl::disconnect() {
 }
 
 Error ControllerImpl::setCurrent(float current) {
-    (void) current;  // value encoding still TODO (see Java, currently hardcoded)
+    if (current < 0.0f) {
+        return Error(ErrorCode::InvalidParameter, "Current must be positive");
+    }
+    uint8_t amperes = static_cast<uint8_t>(current);
+    uint8_t milliamperes = static_cast<uint8_t>((current - amperes) * 100);
+    // PX100
     uint8_t command[] = {
         0xB1, 0xB2,  // header
-        cmd(Command::SetCurrent),
-        0x01, 0x17,
+        cmd(CommandPX100::SetCurrent),
+        amperes,
+        milliamperes,
         0xB6,
     };
-    auto answer = sendCommandAndWait(command, sizeof(command));
+    auto answer = sendPX100CommandAndWait(command, sizeof(command));
     if (!answer.has_value()) {
+        sendDebugMessage(DebugListener::Level::Answer, "Failed to send SetCurrent command");
         return answer.error();
     }
     // TODO: analyze answer (verify echoed status / checksum).
@@ -61,7 +83,7 @@ Error ControllerImpl::setVoltage(float voltage) {
     uint8_t command[] = {
         0xFF, 0x55,  // header
         0x11, 0x02,  // Master-Slave
-        cmd(Command::SetVoltage),
+        cmd(CommandPX100::SetCutoffVoltage),
         0x00, 0x00, 0x00, 0x00,  // value
         0x00,                    // checksum
     };
@@ -89,14 +111,28 @@ Error ControllerImpl::start() {
 }
 
 Error ControllerImpl::stop() {
-    return Error::NotImplemented;
+        uint8_t command[] = {
+        0xFF, 0x55,  // header
+        static_cast<uint8_t>(MessageType::MasterSlave), // Master-Slave
+        0x02,
+        0x31,
+        0x80, 0x80, 0x80, 0x80,  // value
+        0x00,                    // checksum
+    };
+    command[9] = calculateChecksum(command, sizeof(command));
+    auto answer = sendCommandAndWait(command, sizeof(command));
+    if (!answer.has_value()) {
+        return answer.error();
+    }
+    return Error::None;
 }
 
 Error ControllerImpl::resetCounters() {
     uint8_t command[] = {
         0xFF, 0x55,  // header
-        0x11, 0x02,  // Master-Slave
-        cmd(Command::ResetAll),
+        static_cast<uint8_t>(MessageType::MasterSlave), // Master-Slave
+        0x02,
+        cmd(CommandAtorch::ResetAll),
         0x00, 0x00, 0x00, 0x00,  // value
         0x00,                    // checksum
     };
@@ -105,16 +141,25 @@ Error ControllerImpl::resetCounters() {
     if (!answer.has_value()) {
         return answer.error();
     }
-    // TODO: analyze answer (verify echoed status / checksum).
     return Error::None;
 }
 
 Error ControllerImpl::sendCommand(const uint8_t* command, BufferSize_t size) {
+    if (debugListener_) {
+        std::stringstream ss;
+        ss << "Sending command of length " << size << ": " ;
+        for (std::size_t i = 0; i < size; ++i) {
+            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(command[i]) << " ";
+        }
+        sendDebugMessage(DebugListener::Level::Raw, ss.str());
+    }
     return source.write(command, size);
 }
 
-std::expected<std::vector<uint8_t>, Error> ControllerImpl::sendCommandAndWait(
-        const uint8_t* command, BufferSize_t size) {
+std::expected<std::vector<uint8_t>, Error> 
+ControllerImpl::sendCommandAndWait(
+        const uint8_t* command, 
+        BufferSize_t size) {
     // Serialize whole round-trips so only one command is in flight at a time.
     std::lock_guard<std::mutex> commandGuard(commandMutex_);
 
@@ -138,10 +183,54 @@ std::expected<std::vector<uint8_t>, Error> ControllerImpl::sendCommandAndWait(
     if (!ok) {
         return std::unexpected(Error::Timeout);  // timed out
     }
+    if (!replyError_.isSuccess()) {
+        return std::unexpected(replyError_);
+    }
+    return std::expected<std::vector<uint8_t>, Error>(std::move(lastAnswer_));
+}
+
+std::expected<std::vector<uint8_t>, Error> 
+ControllerImpl::sendPX100CommandAndWait(
+        const uint8_t* command, 
+        BufferSize_t size) {
+    // Serialize whole round-trips so only one command is in flight at a time.
+    std::lock_guard<std::mutex> commandGuard(commandMutex_);
+
+    std::unique_lock<std::mutex> lock(stateMutex_);
+    answerPx100Received_ = false;
+    waitingForPx100Answer_ = true;
+    lastAnswer_.clear();
+
+    // Send while holding stateMutex_: cv.wait_for() below releases it
+    // atomically, so an answer arriving on the worker thread can't slip in
+    // between the send and the wait (no lost wakeup).
+    Error err = sendCommand(command, size);
+    if (!err.isSuccess()) {
+        waitingForPx100Answer_ = false;
+        return std::unexpected(err);
+    }
+
+    bool ok = responseCv_.wait_for(lock, kResponseTimeout,
+                                   [this] { return answerPx100Received_; });
+    waitingForPx100Answer_ = false;
+    if (!ok) {
+        return std::unexpected(Error::Timeout);  // timed out
+    }
+    if (!replyError_.isSuccess()) {
+        return std::unexpected(replyError_);
+    }
     return std::expected<std::vector<uint8_t>, Error>(std::move(lastAnswer_));
 }
 
 void ControllerImpl::onDataReceived(const uint8_t* data, BufferSize_t size) {
+    if (size == 1 && data[0] == PX100_ACK && waitingForPx100Answer_) {
+        sendDebugMessage(DebugListener::Level::Raw, "Received PX100 ACK");
+        answerPx100Received_ = true;
+        waitingForPx100Answer_ = false;
+        replyError_ = Error::None;
+        responseCv_.notify_one();
+        return;
+    }
     // Add everything to the collector as-is, without any checks.
     collector_.insert(collector_.end(), data, data + size);
     parseCollector();
@@ -198,7 +287,7 @@ void ControllerImpl::onAnswer(const uint8_t* answer, std::size_t length) {
 
     if (debugListener_) {
         std::stringstream ss;
-        ss << "Received answer of length " << length << ":" << std::endl;
+        ss << "Received answer of length " << length << ": ";
         for (std::size_t i = 0; i < length; ++i) {
             ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(answer[i]) << " ";
         }
@@ -220,26 +309,32 @@ void ControllerImpl::onAnswer(const uint8_t* answer, std::size_t length) {
         return;
     }
     MessageType messageType = static_cast<MessageType>(answer[2]);
+
     switch (messageType) {
-        case MessageType::Report:
+        case MessageType::Report: {
             sendDebugMessage(DebugListener::Level::Answer, "Received report frame");
+            parseReport(answer, length);
             break;
-        case MessageType::Reply:
+        }
+
+        case MessageType::Reply: {
             sendDebugMessage(DebugListener::Level::Answer, "Received reply frame");
+            parseReply(answer, length);
             break;
-        case MessageType::MasterSlave:
+        }
+        case MessageType::MasterSlave: {
+            if (length != 11) {
+                sendDebugMessage(DebugListener::Level::Raw, "Request packet length mismatch");
+                return;
+            }
             sendDebugMessage(DebugListener::Level::Answer, "Received Master-Slave frame");
             break;
-        default:
-            sendDebugMessage(DebugListener::Level::Answer, "Received unknown frame type: " + std::to_string(static_cast<uint8_t>(messageType)));
+        }
+        default: {
+            sendDebugMessage(DebugListener::Level::Answer, 
+                "Received unknown frame type: " + std::to_string(static_cast<uint8_t>(messageType)));
             break;
-    }
-
-    if (waitingForAnswer_ && messageType == MessageType::Reply) {
-        lastAnswer_.assign(answer, answer + length);
-        answerReceived_ = true;
-        waitingForAnswer_ = false;
-        responseCv_.notify_one();
+        }
     }
 }
 
@@ -259,6 +354,57 @@ void ControllerImpl::subscribeToDebugLogs(DebugListener *listener) {
 void ControllerImpl::sendDebugMessage(DebugListener::Level level, const std::string& message) {
     if (debugListener_) {
         debugListener_->onDebugMessage(level, message);
+    }
+}
+
+void ControllerImpl::parseReport(const uint8_t* answer, std::size_t length) {
+    if (length != 36) {
+        sendDebugMessage(DebugListener::Level::Raw, "Report packet length mismatch");
+        return;
+    }
+    uint8_t deviceType = answer[3];
+    if (deviceType != 0x02) {
+        sendDebugMessage(DebugListener::Level::Answer, "Unknown device type: " + std::to_string(deviceType));
+        return;  // Not a DL24 device, ignore
+    }
+    float volt = ((static_cast<uint32_t>(answer[4]) << 16) |
+                    (static_cast<uint32_t>(answer[5]) << 8) |
+                    (static_cast<uint32_t>(answer[6]) << 0)) / 10.0f;
+
+    float current = ((static_cast<uint32_t>(answer[7]) << 16) |
+                    (static_cast<uint32_t>(answer[8]) << 8) |
+                    (static_cast<uint32_t>(answer[9]) << 0)) / 1000.0f;
+    float capacity = ((static_cast<uint32_t>(answer[10]) << 16) |
+                    (static_cast<uint32_t>(answer[11]) << 8) |
+                    (static_cast<uint32_t>(answer[12]) << 0)) / 100.0f;
+    sendDebugMessage(DebugListener::Level::Answer, 
+        "Voltage: " + std::to_string(volt) + 
+        ", Current: " + std::to_string(current) +
+        ", Capacity: " + std::to_string(capacity));
+}
+
+void ControllerImpl::parseReply(const uint8_t* answer, std::size_t length) {
+    if (length != 8) {
+        sendDebugMessage(DebugListener::Level::Raw, "Reply packet length mismatch");
+        return;
+    }
+    if (waitingForAnswer_) {
+        uint16_t errorCode = (static_cast<uint16_t>(answer[3]) << 8) | static_cast<uint16_t>(answer[4]);
+        switch (errorCode) {
+            case 0x0101:
+                replyError_ = Error::None;  // No error
+                break;
+            case 0x0103:
+                replyError_ = Error(ErrorCode::InvalidCommand, "Device does not support this command");
+                break;
+            default:
+                replyError_ = Error(ErrorCode::UnknownError, "Unknown error code: " + std::to_string(errorCode));
+                break;
+        }
+        lastAnswer_.assign(answer, answer + length);
+        answerReceived_ = true;
+        waitingForAnswer_ = false;
+        responseCv_.notify_one();
     }
 }
 

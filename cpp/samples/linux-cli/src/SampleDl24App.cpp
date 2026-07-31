@@ -16,6 +16,11 @@ SampleDl24App::SampleDl24App(ViewModel &viewModel) :
     menu_entries_ = {
         "Connect",
         "Save logs",
+        "Load current",
+        "Cutoff voltage",
+        "Set timer",
+        "Enable Load",
+        "Test action",
         "Quit",
     };
 }
@@ -78,7 +83,10 @@ void SampleDl24App::run() {
         case 1:  // Save logs
             viewModel_.onUiAction(OnSaveLogsRequested());
             break;
-        case 2:  // Quit
+        case 2:  // Test action
+            viewModel_.onUiAction(TestActionRequested());
+            break;
+        case 3:  // Quit
             viewModel_.onUiAction(OnExitClicked());
             break;
         default:

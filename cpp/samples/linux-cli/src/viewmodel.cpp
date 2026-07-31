@@ -60,6 +60,8 @@ void ViewModel::onUiAction(const UiEvent& event) {
         }
     } else if (const auto* saveLogsEvent = dynamic_cast<const OnSaveLogsRequested*>(&event)) {
         saveLogs();
+    } else if (const auto* testActionEvent = dynamic_cast<const TestActionRequested*>(&event)) {
+        testAction();
     }
 }
 
@@ -144,10 +146,23 @@ void ViewModel::addLogMessage(const std::string& message) {
     
     std::string timestampedMessage = ss.str() + " " + message;
     state.uart_logs.push_back(timestampedMessage);
-    while (state.uart_logs.size() > 15) {
+    while (state.uart_logs.size() > 35) {
         state.uart_logs.erase(state.uart_logs.begin()); // Keep only the last 15 messages
     }
     if (stateListener_) {
         stateListener_->onStateChanged(state);
+    }
+}
+
+void ViewModel::testAction() {
+    if (!state.isConnected) {
+        addLogMessage("Cannot perform test action: device not connected.");
+        return;
+    }
+    if (controller_) {
+        dl24::Error err = controller_->setCurrent(2.22f);
+        if (!err.isSuccess()) {
+            addLogMessage("Test action failed: " + std::string(err.what()));
+        }
     }
 }

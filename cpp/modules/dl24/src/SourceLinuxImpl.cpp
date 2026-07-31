@@ -95,14 +95,6 @@ Error SourceLinuxImpl::write(const uint8_t* data, BufferSize_t size) {
         return Error(ErrorCode::NotOpen, "UART port not open");
     }
     size_t total = 0;
-
-    // Debug: dump data to stdout in hex
-    std::cout << "Writing " << size << " bytes: ";
-    for (BufferSize_t i = 0; i < size; ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') 
-                  << static_cast<int>(data[i]) << " ";
-    }
-    std::cout << std::dec << std::endl;
     
     while (total < size) {
         ssize_t n = ::write(fd_, data + total, size - total);
