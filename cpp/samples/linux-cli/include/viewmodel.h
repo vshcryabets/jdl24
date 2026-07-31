@@ -13,6 +13,12 @@ struct ViewState {
     std::vector<std::string> uart_logs = {};
 };
 
+class StateListener {
+public:
+    virtual ~StateListener() = default;
+    virtual void onStateChanged(const ViewState& state) = 0;
+};
+
 struct UiEvent {
     virtual ~UiEvent() = default;
 };
@@ -34,7 +40,7 @@ struct LoadSetVoltage: public UiEvent {
     float voltage;
 };
 
-class ViewModel {
+class ViewModel: public dl24::DebugListener {
 private:
     void loadConfiguration(std::string configFilePath);
     void saveConfiguration(std::string configFilePath);
@@ -43,11 +49,16 @@ private:
 
     std::unique_ptr<dl24::Source> source_;
     std::unique_ptr<dl24::Controller> controller_;
+    StateListener* stateListener_ = nullptr;
 
     void onOpenDevice(const Open* event);
+
+    void onDebugMessage(dl24::DebugListener::Level level, const std::string& message) override;
 public:
     ViewModel();
     virtual ~ViewModel() = default;
     void onUiAction(const UiEvent& event);
     const ViewState& getState() const { return state; }
+    void setStateListener(StateListener* listener) { stateListener_ = listener; }
+    void addLogMessage(const std::string& message);
 };

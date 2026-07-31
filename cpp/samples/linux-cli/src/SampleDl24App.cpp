@@ -3,16 +3,18 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
-#include <vector>
-#include <string>
+
+using namespace ftxui;
 
 using namespace ftxui;
 
 
-SampleDl24App::SampleDl24App(ViewModel &viewModel) : viewModel_(viewModel) {
+SampleDl24App::SampleDl24App(ViewModel &viewModel) : viewModel_(viewModel), screen_(ScreenInteractive::Fullscreen()) {
+    viewModel.setStateListener(this);
 }
 
 SampleDl24App::~SampleDl24App() {
+    viewModel_.setStateListener(nullptr);
 }
 
 ftxui::Component SampleDl24App::connectToDeviceDialog() {
@@ -55,8 +57,6 @@ ftxui::Component SampleDl24App::connectToDeviceDialog() {
 }
 
 void SampleDl24App::run() {
-    auto screen = ScreenInteractive::Fullscreen();
-
     // 1. Define State
     std::vector<std::string> menu_entries = {
         "Connect",
@@ -71,7 +71,7 @@ void SampleDl24App::run() {
             viewModel_.onUiAction(OnConnectRequested());
         } else if (menu_selected == 1) { 
             // Quit
-            screen.Exit();
+            screen_.Exit();
         }
     };
     auto menu = Menu(&menu_entries, &menu_selected, option);
@@ -105,5 +105,9 @@ void SampleDl24App::run() {
     ftxui::Component dialog_renderer = connectToDeviceDialog();
     auto root = Modal(layout, dialog_renderer, &viewModel_.getState().show_connect_dialog);
     // 4. Run the application
-    screen.Loop(root);
+    screen_.Loop(root);
+}
+
+void SampleDl24App::onStateChanged(const ViewState& state) {
+    screen_.PostEvent(ftxui::Event::Custom);
 }

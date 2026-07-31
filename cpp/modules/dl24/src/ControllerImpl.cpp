@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 namespace dl24 {
 
@@ -195,12 +196,14 @@ void ControllerImpl::onAnswer(const uint8_t* answer, std::size_t length) {
     // blocked in sendCommandAndWait(); ignore unsolicited frames.
     std::lock_guard<std::mutex> lock(stateMutex_);
 
-    std::cout << "onAnswer size=" << length << ": ";
-    for (std::size_t i = 0; i < length; ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(answer[i]) << " ";
+    if (debugListener_) {
+        std::stringstream ss;
+        ss << "Received answer of length " << length << ":" << std::endl;
+        for (std::size_t i = 0; i < length; ++i) {
+            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(answer[i]) << " ";
+        }
+        debugListener_->onDebugMessage(DebugListener::Level::Raw, ss.str());
     }
-    std::cout << std::dec << std::endl;
-
 
     if (!waitingForAnswer_) {
         // TODO: route unsolicited status frames (decode into a Dl24Status).
@@ -220,6 +223,10 @@ uint8_t ControllerImpl::calculateChecksum(const uint8_t* packet, BufferSize_t si
         sum += packet[i];
     }
     return static_cast<uint8_t>((sum & 0xFF) ^ 0x44);
+}
+
+void ControllerImpl::subscribeToDebugLogs(DebugListener *listener) {
+    debugListener_ = listener;
 }
 
 } // namespace dl24

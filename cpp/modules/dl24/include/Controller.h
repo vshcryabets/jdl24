@@ -1,9 +1,29 @@
 #pragma once
 
+#include <cstdint>
+
 #include "Error.h"
 #include "Source.h"
 
 namespace dl24 {
+
+class DebugListener {
+public:
+    enum class Level: uint8_t {
+        Raw,
+        Paket,
+        Answer,
+    };
+public:
+    virtual ~DebugListener() = default;
+
+    /**
+     * Called when a debug message is available.
+     *
+     * @param message the debug message.
+     */
+    virtual void onDebugMessage(Level level, const std::string& message) {};
+};
 
 /**
  * Abstract DL24 electronic-load controller.
@@ -50,6 +70,9 @@ public:
 
     /** Reset all accumulated counters (capacity, energy, time). @return Error indicating success or failure. */
     virtual Error resetCounters() = 0;
+
+    /** Debug methods */
+    virtual void subscribeToDebugLogs(DebugListener *listener) = 0;
 
 protected:
     /**

@@ -36,6 +36,7 @@ public:
     Error resetCounters() override;
 
     void onDataReceived(const uint8_t* data, BufferSize_t size) override;
+    void subscribeToDebugLogs(DebugListener *listener) override;
 
 protected:
     /** Compute the DL24 checksum over a 10-byte packet. */
@@ -92,6 +93,7 @@ private:
     bool waitingForAnswer_ = false;
     bool answerReceived_ = false;
     std::vector<uint8_t> lastAnswer_;
+    DebugListener *debugListener_ = nullptr;
 };
 
 } // namespace dl24

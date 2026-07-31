@@ -1,6 +1,9 @@
 #include "viewmodel.h"
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 #include "SourceLinuxImpl.h"
 #include "ControllerImpl.h"
@@ -20,15 +23,16 @@ ViewModel::ViewModel() : state() {
 void ViewModel::onOpenDevice(const Open* event) {
     state.device_path = event->filepath;
     saveConfiguration("dl24.conf");
-    state.uart_logs.push_back("Connecting to device at: " + state.device_path);
+    addLogMessage("Connecting to device at: " + state.device_path);
     source_ = std::make_unique<dl24::SourceLinuxImpl>(state.device_path);
     controller_ = std::make_unique<dl24::ControllerImpl>(*source_);
+    controller_->subscribeToDebugLogs(this);
 
     dl24::Error err = controller_->connect();
     if (!err.isSuccess()) {
-        state.uart_logs.push_back("Failed to start controller: " + std::string(err.what()));
+        addLogMessage("Failed to start controller: " + std::string(err.what()));
     } else {
-        state.uart_logs.push_back("Controller started successfully.");
+        addLogMessage("Controller started successfully.");
     }
 }
 
@@ -62,5 +66,40 @@ void ViewModel::saveConfiguration(std::string configFilePath) {
     std::ofstream configFile(configFilePath);
     if (configFile.is_open()) {
         configFile << configJson.dump(4);  // Pretty print with 4 spaces indentation
+    }
+}
+
+void ViewModel::onDebugMessage(dl24::DebugListener::Level level, const std::string& message) {
+    std::string levelStr;
+    switch (level) {
+        case dl24::DebugListener::Level::Raw:
+            levelStr = "[RAW]";
+            break;
+        case dl24::DebugListener::Level::Paket:
+            levelStr = "[PAKET]";
+            break;
+        case dl24::DebugListener::Level::Answer:
+            levelStr = "[ANSWER]";
+            break;
+    }
+    addLogMessage(levelStr + " " + message);
+}
+
+void ViewModel::addLogMessage(const std::string& message) {
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time), "%H:%M:%S");
+    ss << "." << std::setfill('0') << std::setw(3) << ms.count();
+    
+    std::string timestampedMessage = ss.str() + " " + message;
+    state.uart_logs.push_back(timestampedMessage);
+    while (state.uart_logs.size() > 15) {
+        state.uart_logs.erase(state.uart_logs.begin()); // Keep only the last 15 messages
+    }
+    if (stateListener_) {
+        stateListener_->onStateChanged(state);
     }
 }
