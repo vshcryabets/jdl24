@@ -7,6 +7,12 @@
 
 namespace dl24 {
 
+enum class MessageType : uint8_t {
+    Report = 0x01,
+    Reply = 0x02,
+    MasterSlave = 0x11,
+};
+
 class DebugListener {
 public:
     enum class Level: uint8_t {

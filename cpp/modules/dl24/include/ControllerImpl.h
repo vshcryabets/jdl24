@@ -48,6 +48,8 @@ protected:
      */
     virtual void onAnswer(const uint8_t* answer, std::size_t length);
 
+    void sendDebugMessage(DebugListener::Level level, const std::string& message);
+
 private:
     // Extract complete answers from the collector, delivering and removing each.
     // The device streams answers periodically, so an answer runs from its FF 55

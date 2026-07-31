@@ -202,18 +202,45 @@ void ControllerImpl::onAnswer(const uint8_t* answer, std::size_t length) {
         for (std::size_t i = 0; i < length; ++i) {
             ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(answer[i]) << " ";
         }
-        debugListener_->onDebugMessage(DebugListener::Level::Raw, ss.str());
+        sendDebugMessage(DebugListener::Level::Raw, ss.str());
     }
-
-    if (!waitingForAnswer_) {
-        // TODO: route unsolicited status frames (decode into a Dl24Status).
+    // try to decode and check crc
+    if (length < 4) {  // Minimum length: 2 header bytes, 1 payload byte, 1 checksum byte
+        sendDebugMessage(DebugListener::Level::Raw, "Packet too small < 4 bytes");
         return;
     }
+    if (answer[0] != MAGIC_B1 || answer[1] != MAGIC_B2) {
+        sendDebugMessage(DebugListener::Level::Raw, "Invalid packet header");
+        return;
+    }
+    uint8_t calculatedChecksum = calculateChecksum(answer, length);
+    uint8_t receivedChecksum = answer[length - 1];
+    if (calculatedChecksum != receivedChecksum) {
+        sendDebugMessage(DebugListener::Level::Raw, "Checksum mismatch");
+        return;
+    }
+    MessageType messageType = static_cast<MessageType>(answer[2]);
+    switch (messageType) {
+        case MessageType::Report:
+            sendDebugMessage(DebugListener::Level::Answer, "Received report frame");
+            break;
+        case MessageType::Reply:
+            sendDebugMessage(DebugListener::Level::Answer, "Received reply frame");
+            break;
+        case MessageType::MasterSlave:
+            sendDebugMessage(DebugListener::Level::Answer, "Received Master-Slave frame");
+            break;
+        default:
+            sendDebugMessage(DebugListener::Level::Answer, "Received unknown frame type: " + std::to_string(static_cast<uint8_t>(messageType)));
+            break;
+    }
 
-    lastAnswer_.assign(answer, answer + length);
-    answerReceived_ = true;
-    waitingForAnswer_ = false;
-    responseCv_.notify_one();
+    if (waitingForAnswer_ && messageType == MessageType::Reply) {
+        lastAnswer_.assign(answer, answer + length);
+        answerReceived_ = true;
+        waitingForAnswer_ = false;
+        responseCv_.notify_one();
+    }
 }
 
 uint8_t ControllerImpl::calculateChecksum(const uint8_t* packet, BufferSize_t size) {
@@ -227,6 +254,12 @@ uint8_t ControllerImpl::calculateChecksum(const uint8_t* packet, BufferSize_t si
 
 void ControllerImpl::subscribeToDebugLogs(DebugListener *listener) {
     debugListener_ = listener;
+}
+
+void ControllerImpl::sendDebugMessage(DebugListener::Level level, const std::string& message) {
+    if (debugListener_) {
+        debugListener_->onDebugMessage(level, message);
+    }
 }
 
 } // namespace dl24

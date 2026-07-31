@@ -11,6 +11,8 @@ struct ViewState {
     bool show_connect_dialog = false;
     std::string device_path = "";
     std::vector<std::string> uart_logs = {};
+    bool isConnected = false;
+    bool shouldCloseApp = false;
 };
 
 class StateListener {
@@ -27,6 +29,8 @@ struct OnConnectRequested: public UiEvent {};
 struct OnLoadStart: public UiEvent {};
 struct OnLoadStop: public UiEvent {};
 struct ResetStatistics: public UiEvent {};
+struct OnExitClicked: public UiEvent {};
+struct OnSaveLogsRequested: public UiEvent {};
 struct Open: public UiEvent {
     Open(std::string path) : filepath(path), UiEvent() {}
     std::string filepath;
@@ -52,8 +56,10 @@ private:
     StateListener* stateListener_ = nullptr;
 
     void onOpenDevice(const Open* event);
+    void onCloseDevice();
 
     void onDebugMessage(dl24::DebugListener::Level level, const std::string& message) override;
+    void saveLogs();
 public:
     ViewModel();
     virtual ~ViewModel() = default;

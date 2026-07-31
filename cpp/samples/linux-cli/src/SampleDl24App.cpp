@@ -9,8 +9,15 @@ using namespace ftxui;
 using namespace ftxui;
 
 
-SampleDl24App::SampleDl24App(ViewModel &viewModel) : viewModel_(viewModel), screen_(ScreenInteractive::Fullscreen()) {
+SampleDl24App::SampleDl24App(ViewModel &viewModel) : 
+    viewModel_(viewModel), 
+    screen_(ScreenInteractive::Fullscreen()) {
     viewModel.setStateListener(this);
+    menu_entries_ = {
+        "Connect",
+        "Save logs",
+        "Quit",
+    };
 }
 
 SampleDl24App::~SampleDl24App() {
@@ -58,23 +65,27 @@ ftxui::Component SampleDl24App::connectToDeviceDialog() {
 
 void SampleDl24App::run() {
     // 1. Define State
-    std::vector<std::string> menu_entries = {
-        "Connect",
-        "Quit",
-    };
     int menu_selected = 0;
 
     // 2. Create the Menu Component
     MenuOption option;
     option.on_enter = [&] {
-        if (menu_selected == 0) { 
+        switch (menu_selected)
+        {
+        case 0:  // Connect / Disconnect
             viewModel_.onUiAction(OnConnectRequested());
-        } else if (menu_selected == 1) { 
-            // Quit
-            screen_.Exit();
+            break;
+        case 1:  // Save logs
+            viewModel_.onUiAction(OnSaveLogsRequested());
+            break;
+        case 2:  // Quit
+            viewModel_.onUiAction(OnExitClicked());
+            break;
+        default:
+            break;
         }
     };
-    auto menu = Menu(&menu_entries, &menu_selected, option);
+    auto menu = Menu(&menu_entries_, &menu_selected, option);
 
     // 3. Create the Main Layout
     // We wrap the interactive menu in a Renderer to define how the screen is drawn
@@ -109,5 +120,16 @@ void SampleDl24App::run() {
 }
 
 void SampleDl24App::onStateChanged(const ViewState& state) {
-    screen_.PostEvent(ftxui::Event::Custom);
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        menu_entries_[0] = state.isConnected ? "Disconnect" : "Connect";
+    }
+
+    if (state.shouldCloseApp) {
+        screen_.Post([&]() {
+            screen_.Exit();
+        });
+    } else {
+        screen_.PostEvent(ftxui::Event::Custom);
+    }
 }

@@ -30,8 +30,10 @@ void ViewModel::onOpenDevice(const Open* event) {
 
     dl24::Error err = controller_->connect();
     if (!err.isSuccess()) {
+        state.isConnected = false;
         addLogMessage("Failed to start controller: " + std::string(err.what()));
     } else {
+        state.isConnected = true;
         addLogMessage("Controller started successfully.");
     }
 }
@@ -40,11 +42,57 @@ void ViewModel::onUiAction(const UiEvent& event) {
     if (const auto* canceled = dynamic_cast<const ConnectDialogCanceled*>(&event)) {
         state.show_connect_dialog = false;
     } else if (const auto* openEvent = dynamic_cast<const OnConnectRequested*>(&event)) {
-        state.show_connect_dialog = true;
+        if (!state.isConnected) {
+            state.show_connect_dialog = true;
+        } else {
+            onCloseDevice();
+        }
     } else if (const auto* openEvent = dynamic_cast<const Open*>(&event)) {
         state.show_connect_dialog = false; // Close the dialog after handling
         onOpenDevice(openEvent);
+    } else if (const auto* exitEvent = dynamic_cast<const OnExitClicked*>(&event)) {
+        if (state.isConnected) {
+            onCloseDevice();
+        }
+        state.shouldCloseApp = true;
+        if (stateListener_) {
+            stateListener_->onStateChanged(state);
+        }
+    } else if (const auto* saveLogsEvent = dynamic_cast<const OnSaveLogsRequested*>(&event)) {
+        saveLogs();
     }
+}
+
+void ViewModel::saveLogs() {
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    
+    std::stringstream ss;
+    ss << "dl24_logs_" << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S") << ".txt";
+    std::string filename = ss.str();
+    
+    std::ofstream logFile(filename);
+    if (logFile.is_open()) {
+        for (const auto& log : state.uart_logs) {
+            logFile << log << std::endl;
+        }
+        logFile.close();
+        addLogMessage("Logs saved to " + filename);
+    } else {
+        addLogMessage("Failed to save logs.");
+    }
+}
+
+void ViewModel::onCloseDevice() {
+    if (controller_) {
+        controller_->disconnect();
+        controller_.reset();
+    }
+    if (source_) {
+        source_.reset();
+    }
+    state.isConnected = false;
+    addLogMessage("Device disconnected.");
 }
 
 void ViewModel::loadConfiguration(std::string configFilePath) {

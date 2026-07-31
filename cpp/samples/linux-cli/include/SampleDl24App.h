@@ -1,6 +1,9 @@
 #pragma once
 
 #include <string>
+#include <vector>
+#include <memory>
+#include <mutex>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -14,6 +17,9 @@ private:
     ftxui::ScreenInteractive screen_;
     std::string device_path;
     ftxui::Component connectToDeviceDialog();
+
+    std::mutex state_mutex_;
+    std::vector<std::string> menu_entries_;
 public:
     SampleDl24App(ViewModel &viewModel);
     ~SampleDl24App();
