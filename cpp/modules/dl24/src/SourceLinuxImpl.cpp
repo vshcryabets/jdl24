@@ -23,25 +23,25 @@ SourceLinuxImpl::~SourceLinuxImpl() {
     close();
 }
 
-Source::Result SourceLinuxImpl::open(const UartConfig& config) {
+Error SourceLinuxImpl::open(const UartConfig& config) {
     if (isOpen()) {
-        return Result::AlreadyOpen;
+        return Error(ErrorCode::AlreadyOpen, "Port already open");
     }
 
     unsigned baud = 0;
     if (!toBaudConstant(config.baudRate, baud)) {
-        return Result::InvalidConfig;
+        return Error(ErrorCode::InvalidParameter, "Invalid UART baudrate configuration");
     }
 
     fd_ = ::open(device_.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd_ < 0) {
-        return Result::OpenFailed;
+        return Error(ErrorCode::OpenFailed, "Failed to open UART port");
     }
 
     if (!configurePort(config)) {
         ::close(fd_);
         fd_ = -1;
-        return Result::OpenFailed;
+        return Error(ErrorCode::OpenFailed, "Failed to configure UART port");
     }
 
     // eventfd lets close() wake the worker out of a blocked poll() at once.
@@ -49,17 +49,17 @@ Source::Result SourceLinuxImpl::open(const UartConfig& config) {
     if (wakeFd_ < 0) {
         ::close(fd_);
         fd_ = -1;
-        return Result::OpenFailed;
+        return Error(ErrorCode::OpenFailed, "Failed to create eventfd");
     }
 
     running_.store(true);
     worker_ = std::thread(&SourceLinuxImpl::workerLoop, this);
-    return Result::Ok;
+    return Error::None;
 }
 
-Source::Result SourceLinuxImpl::close() {
+Error SourceLinuxImpl::close() {
     if (!running_.load() && fd_ < 0) {
-        return Result::Ok;
+        return Error::None;
     }
 
     running_.store(false);
@@ -83,16 +83,16 @@ Source::Result SourceLinuxImpl::close() {
         ::close(wakeFd_);
         wakeFd_ = -1;
     }
-    return Result::Ok;
+    return Error::None;
 }
 
 bool SourceLinuxImpl::isOpen() const {
     return fd_ >= 0;
 }
 
-Source::Result SourceLinuxImpl::write(const uint8_t* data, BufferSize_t size) {
+Error SourceLinuxImpl::write(const uint8_t* data, BufferSize_t size) {
     if (!isOpen()) {
-        return Result::NotOpen;
+        return Error(ErrorCode::NotOpen, "UART port not open");
     }
     size_t total = 0;
 
@@ -114,15 +114,15 @@ Source::Result SourceLinuxImpl::write(const uint8_t* data, BufferSize_t size) {
                 // Output buffer full; wait until the fd is writable again.
                 pollfd pfd{fd_, POLLOUT, 0};
                 if (::poll(&pfd, 1, -1) < 0 && errno != EINTR) {
-                    return Result::WriteFailed;
+                    return Error(ErrorCode::WriteFailed, "Failed to write to UART port");
                 }
                 continue;
             }
-            return Result::WriteFailed;
+            return Error(ErrorCode::WriteFailed, "Failed to write to UART port");
         }
         total += static_cast<size_t>(n);
     }
-    return Result::Ok;
+    return Error::None;
 }
 
 void SourceLinuxImpl::setListener(Listener* listener) {

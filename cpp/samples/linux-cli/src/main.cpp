@@ -6,36 +6,9 @@
 
 #include "SampleDl24App.h"
 
-namespace {
-
-void printMenu() {
-    std::printf("\n=== DL24 control ===\n");
-    std::printf("  1) Set voltage\n");
-    std::printf("  2) Set current\n");
-    std::printf("  3) Start\n");
-    std::printf("  4) Stop\n");
-    std::printf("  5) Reset counters\n");
-    std::printf("  0) Exit\n");
-    std::printf("Select: ");
-    std::fflush(stdout);
-}
-
-float readFloat(const char* prompt) {
-    std::printf("%s", prompt);
-    std::fflush(stdout);
-    float value = 0.0f;
-    std::cin >> value;
-    return value;
-}
-
-void reportResult(const char* action, bool ok) {
-    std::printf("%s: %s\n", action, ok ? "OK" : "FAILED");
-}
-
-}  // namespace
-
 int main() {
-    SampleDl24App app;
+    ViewModel viewModel;
+    SampleDl24App app(viewModel);
     app.run();
 
     // dl24::SourceLinuxImpl source("/dev/ttyUSB0");

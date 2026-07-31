@@ -9,13 +9,13 @@
 using namespace ftxui;
 
 
-SampleDl24App::SampleDl24App() {
+SampleDl24App::SampleDl24App(ViewModel &viewModel) : viewModel_(viewModel) {
 }
 
 SampleDl24App::~SampleDl24App() {
 }
 
-ftxui::Component SampleDl24App::connectToDevice() {
+ftxui::Component SampleDl24App::connectToDeviceDialog() {
     this->device_path = viewModel_.getState().device_path;
     auto input_path = Input(&device_path, "e.g. /dev/ttyUSB0 or COM3");
     
@@ -102,7 +102,7 @@ void SampleDl24App::run() {
             uart_window
         });
     });
-    ftxui::Component dialog_renderer = connectToDevice();
+    ftxui::Component dialog_renderer = connectToDeviceDialog();
     auto root = Modal(layout, dialog_renderer, &viewModel_.getState().show_connect_dialog);
     // 4. Run the application
     screen.Loop(root);

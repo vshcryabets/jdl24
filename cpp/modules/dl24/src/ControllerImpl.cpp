@@ -22,20 +22,25 @@ constexpr uint8_t cmd(Command c) {
 ControllerImpl::ControllerImpl(Source& source)
     : Controller(source) {}
 
-bool ControllerImpl::connect() {
+Error ControllerImpl::connect() {
     source.setListener(this);
     collector_.clear();
     Source::UartConfig config;  // defaults: 9600 8N1
-    return source.open(config) == Source::Result::Ok;
+    auto result = source.open(config);
+    if (!result.isSuccess()) {
+        source.setListener(nullptr);
+        return result;
+    }
+    return Error::None;
 }
 
-bool ControllerImpl::disconnect() {
-    Source::Result result = source.close();
+Error ControllerImpl::disconnect() {
+    auto result = source.close();
     source.setListener(nullptr);
-    return result == Source::Result::Ok;
+    return result;
 }
 
-bool ControllerImpl::setCurrent(float current) {
+Error ControllerImpl::setCurrent(float current) {
     (void) current;  // value encoding still TODO (see Java, currently hardcoded)
     uint8_t command[] = {
         0xB1, 0xB2,  // header
@@ -44,14 +49,14 @@ bool ControllerImpl::setCurrent(float current) {
         0xB6,
     };
     auto answer = sendCommandAndWait(command, sizeof(command));
-    if (!answer) {
-        return false;
+    if (!answer.has_value()) {
+        return answer.error();
     }
     // TODO: analyze answer (verify echoed status / checksum).
-    return true;
+    return Error::None;
 }
 
-bool ControllerImpl::setVoltage(float voltage) {
+Error ControllerImpl::setVoltage(float voltage) {
     uint8_t command[] = {
         0xFF, 0x55,  // header
         0x11, 0x02,  // Master-Slave
@@ -66,27 +71,27 @@ bool ControllerImpl::setVoltage(float voltage) {
     command[8] = static_cast<uint8_t>((intValue >> 0) & 0xFF);
     command[9] = calculateChecksum(command, sizeof(command));
     auto answer = sendCommandAndWait(command, sizeof(command));
-    if (!answer) {
-        return false;
+    if (!answer.has_value()) {
+        return answer.error();
     }
     // TODO: analyze answer (verify echoed status / checksum).
-    return true;
+    return Error::None;
 }
 
-bool ControllerImpl::setTimer(int32_t timer) {
+Error ControllerImpl::setTimer(int32_t timer) {
     (void) timer;
-    return false;
+    return Error::NotImplemented;
 }
 
-bool ControllerImpl::start() {
-    return false;
+Error ControllerImpl::start() {
+    return Error::NotImplemented;
 }
 
-bool ControllerImpl::stop() {
-    return false;
+Error ControllerImpl::stop() {
+    return Error::NotImplemented;
 }
 
-bool ControllerImpl::resetCounters() {
+Error ControllerImpl::resetCounters() {
     uint8_t command[] = {
         0xFF, 0x55,  // header
         0x11, 0x02,  // Master-Slave
@@ -96,18 +101,18 @@ bool ControllerImpl::resetCounters() {
     };
     command[9] = calculateChecksum(command, sizeof(command));
     auto answer = sendCommandAndWait(command, sizeof(command));
-    if (!answer) {
-        return false;
+    if (!answer.has_value()) {
+        return answer.error();
     }
     // TODO: analyze answer (verify echoed status / checksum).
-    return true;
+    return Error::None;
 }
 
-bool ControllerImpl::sendCommand(const uint8_t* command, BufferSize_t size) {
-    return source.write(command, size) == Source::Result::Ok;
+Error ControllerImpl::sendCommand(const uint8_t* command, BufferSize_t size) {
+    return source.write(command, size);
 }
 
-std::optional<std::vector<uint8_t>> ControllerImpl::sendCommandAndWait(
+std::expected<std::vector<uint8_t>, Error> ControllerImpl::sendCommandAndWait(
         const uint8_t* command, BufferSize_t size) {
     // Serialize whole round-trips so only one command is in flight at a time.
     std::lock_guard<std::mutex> commandGuard(commandMutex_);
@@ -120,18 +125,19 @@ std::optional<std::vector<uint8_t>> ControllerImpl::sendCommandAndWait(
     // Send while holding stateMutex_: cv.wait_for() below releases it
     // atomically, so an answer arriving on the worker thread can't slip in
     // between the send and the wait (no lost wakeup).
-    if (!sendCommand(command, size)) {
+    Error err = sendCommand(command, size);
+    if (!err.isSuccess()) {
         waitingForAnswer_ = false;
-        return std::nullopt;
+        return std::unexpected(err);
     }
 
     bool ok = responseCv_.wait_for(lock, kResponseTimeout,
                                    [this] { return answerReceived_; });
     waitingForAnswer_ = false;
     if (!ok) {
-        return std::nullopt;  // timed out
+        return std::unexpected(Error::Timeout);  // timed out
     }
-    return std::move(lastAnswer_);
+    return std::expected<std::vector<uint8_t>, Error>(std::move(lastAnswer_));
 }
 
 void ControllerImpl::onDataReceived(const uint8_t* data, BufferSize_t size) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "Error.h"
 
 // `BufferSize_t` is normally provided project-wide via a compile definition
 // (see the top-level CMakeLists.txt). Fall back to a sane default so this
@@ -49,16 +50,6 @@ public:
         StopBits stopBits = StopBits::One;
     };
 
-    enum class Result : uint8_t {
-        Ok = 0,
-        AlreadyOpen,
-        NotOpen,
-        OpenFailed,
-        WriteFailed,
-        InvalidConfig,
-        Unsupported,
-    };
-
     /**
      * Callback interface for incoming UART data.
      *
@@ -84,16 +75,15 @@ public:
     /**
      * Open the UART with the given settings.
      *
-     * @return Result::Ok on success, Result::AlreadyOpen if the port is already
-     *         open, or another error code on failure.
+     * @return Error indicating success or failure.
      */
-    virtual Result open(const UartConfig& config) = 0;
+    virtual Error open(const UartConfig& config) = 0;
 
     /**
      * Close the UART and stop delivering incoming data.
      * Safe to call when already closed.
      */
-    virtual Result close() = 0;
+    virtual Error close() = 0;
 
     /** @return true when the UART is open and usable. */
     virtual bool isOpen() const = 0;
@@ -103,9 +93,9 @@ public:
      *
      * @param data pointer to the bytes to send.
      * @param size number of bytes to send.
-     * @return Result::Ok when all bytes were queued/sent.
+     * @return Error indicating success or failure.
      */
-    virtual Result write(const uint8_t* data, BufferSize_t size) = 0;
+    virtual Error write(const uint8_t* data, BufferSize_t size) = 0;
 
     /**
      * Register the listener that receives incoming bytes.

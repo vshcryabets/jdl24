@@ -1,7 +1,6 @@
 #pragma once
 
-#include <cstdint>
-
+#include "Error.h"
 #include "Source.h"
 
 namespace dl24 {
@@ -26,31 +25,31 @@ public:
      * Open the connection to the device using the injected Source.
      * @return true on success.
      */
-    virtual bool connect() = 0;
+    virtual Error connect() = 0;
 
     /**
      * Close the connection to the device and stop any background processing.
      * @return true on success.
      */
-    virtual bool disconnect() = 0;
+    virtual Error disconnect() = 0;
 
-    /** Set the target load current in amperes. @return true on success. */
-    virtual bool setCurrent(float current) = 0;
+    /** Set the target load current in amperes. @return Error indicating success or failure. */
+    virtual Error setCurrent(float current) = 0;
 
-    /** Set the target/cutoff voltage in volts. @return true on success. */
-    virtual bool setVoltage(float voltage) = 0;
+    /** Set the target/cutoff voltage in volts. @return Error indicating success or failure. */
+    virtual Error setVoltage(float voltage) = 0;
 
-    /** Set the timer in seconds. @return true on success. */
-    virtual bool setTimer(int32_t timer) = 0;
+    /** Set the timer in seconds. @return Error indicating success or failure. */
+    virtual Error setTimer(int32_t timer) = 0;
 
-    /** Start the load. @return true on success. */
-    virtual bool start() = 0;
+    /** Start the load. @return Error indicating success or failure. */
+    virtual Error start() = 0;
 
-    /** Stop the load. @return true on success. */
-    virtual bool stop() = 0;
+    /** Stop the load. @return Error indicating success or failure. */
+    virtual Error stop() = 0;
 
-    /** Reset all accumulated counters (capacity, energy, time). @return true on success. */
-    virtual bool resetCounters() = 0;
+    /** Reset all accumulated counters (capacity, energy, time). @return Error indicating success or failure. */
+    virtual Error resetCounters() = 0;
 
 protected:
     /**

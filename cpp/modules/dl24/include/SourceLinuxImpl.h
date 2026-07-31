@@ -24,10 +24,10 @@ public:
     explicit SourceLinuxImpl(std::string device);
     ~SourceLinuxImpl() override;
 
-    Result open(const UartConfig& config) override;
-    Result close() override;
+    Error open(const UartConfig& config) override;
+    Error close() override;
     bool isOpen() const override;
-    Result write(const uint8_t* data, BufferSize_t size) override;
+    Error write(const uint8_t* data, BufferSize_t size) override;
     void setListener(Listener* listener) override;
 
 private:

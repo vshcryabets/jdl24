@@ -2,6 +2,10 @@
 
 #include <string>
 #include <vector>
+#include <memory>
+
+#include "Source.h"
+#include "Controller.h"
 
 struct ViewState {
     bool show_connect_dialog = false;
@@ -14,9 +18,20 @@ struct UiEvent {
 };
 struct ConnectDialogCanceled: public UiEvent {};
 struct OnConnectRequested: public UiEvent {};
+struct OnLoadStart: public UiEvent {};
+struct OnLoadStop: public UiEvent {};
+struct ResetStatistics: public UiEvent {};
 struct Open: public UiEvent {
     Open(std::string path) : filepath(path), UiEvent() {}
     std::string filepath;
+};
+struct LoadSetCurrent: public UiEvent {
+    LoadSetCurrent(float current) : current(current), UiEvent() {}
+    float current;
+};
+struct LoadSetVoltage: public UiEvent {
+    LoadSetVoltage(float voltage) : voltage(voltage), UiEvent() {}
+    float voltage;
 };
 
 class ViewModel {
@@ -26,6 +41,10 @@ private:
 
     ViewState state;
 
+    std::unique_ptr<dl24::Source> source_;
+    std::unique_ptr<dl24::Controller> controller_;
+
+    void onOpenDevice(const Open* event);
 public:
     ViewModel();
     virtual ~ViewModel() = default;

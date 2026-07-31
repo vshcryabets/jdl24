@@ -9,6 +9,7 @@
 #include <mutex>
 #include <optional>
 #include <vector>
+#include <expected>
 
 namespace dl24 {
 
@@ -25,14 +26,14 @@ class ControllerImpl : public Controller, public Source::Listener {
 public:
     explicit ControllerImpl(Source& source);
 
-    bool connect() override;
-    bool disconnect() override;
-    bool setCurrent(float current) override;
-    bool setVoltage(float voltage) override;
-    bool setTimer(int32_t timer) override;
-    bool start() override;
-    bool stop() override;
-    bool resetCounters() override;
+    Error connect() override;
+    Error disconnect() override;
+    Error setCurrent(float current) override;
+    Error setVoltage(float voltage) override;
+    Error setTimer(int32_t timer) override;
+    Error start() override;
+    Error stop() override;
+    Error resetCounters() override;
 
     void onDataReceived(const uint8_t* data, BufferSize_t size) override;
 
@@ -58,7 +59,7 @@ private:
     std::size_t findFrameStart(std::size_t from) const;
 
     // Low-level fire-and-forget write of a command packet.
-    bool sendCommand(const uint8_t* command, BufferSize_t size);
+    Error sendCommand(const uint8_t* command, BufferSize_t size);
 
     /**
      * Send a command and block until the device answers or the timeout elapses.
@@ -68,8 +69,11 @@ private:
      *
      * @return the answer bytes, or std::nullopt on send failure / timeout.
      */
-    std::optional<std::vector<uint8_t>> sendCommandAndWait(const uint8_t* command,
-                                                           BufferSize_t size);
+    std::expected<std::vector<uint8_t>, Error> 
+    sendCommandAndWait(
+        const uint8_t* command,
+        BufferSize_t size
+    );
 
     static constexpr uint8_t MAGIC_B1 = 0xFF;
     static constexpr uint8_t MAGIC_B2 = 0x55;

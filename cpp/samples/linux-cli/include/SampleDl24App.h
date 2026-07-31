@@ -10,11 +10,11 @@
 
 class SampleDl24App {
 private:
-    ViewModel viewModel_;
+    ViewModel &viewModel_;
     std::string device_path;
-    ftxui::Component connectToDevice();
+    ftxui::Component connectToDeviceDialog();
 public:
-    SampleDl24App();
+    SampleDl24App(ViewModel &viewModel);
     ~SampleDl24App();
     void run();
 };

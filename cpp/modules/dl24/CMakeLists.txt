@@ -7,6 +7,7 @@ target_sources(dl24cpp
         src/Source.cpp
         src/Controller.cpp
         src/ControllerImpl.cpp
+        src/Error.cpp
     )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

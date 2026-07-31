@@ -2,6 +2,9 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
+#include "SourceLinuxImpl.h"
+#include "ControllerImpl.h"
+
 using json = nlohmann::json;
 
 ViewModel::ViewModel() : state() {
@@ -14,6 +17,21 @@ ViewModel::ViewModel() : state() {
     };
 }
 
+void ViewModel::onOpenDevice(const Open* event) {
+    state.device_path = event->filepath;
+    saveConfiguration("dl24.conf");
+    state.uart_logs.push_back("Connecting to device at: " + state.device_path);
+    source_ = std::make_unique<dl24::SourceLinuxImpl>(state.device_path);
+    controller_ = std::make_unique<dl24::ControllerImpl>(*source_);
+
+    dl24::Error err = controller_->connect();
+    if (!err.isSuccess()) {
+        state.uart_logs.push_back("Failed to start controller: " + std::string(err.what()));
+    } else {
+        state.uart_logs.push_back("Controller started successfully.");
+    }
+}
+
 void ViewModel::onUiAction(const UiEvent& event) {
     if (const auto* canceled = dynamic_cast<const ConnectDialogCanceled*>(&event)) {
         state.show_connect_dialog = false;
@@ -21,9 +39,7 @@ void ViewModel::onUiAction(const UiEvent& event) {
         state.show_connect_dialog = true;
     } else if (const auto* openEvent = dynamic_cast<const Open*>(&event)) {
         state.show_connect_dialog = false; // Close the dialog after handling
-        state.device_path = openEvent->filepath;
-        saveConfiguration("dl24.conf");
-        state.uart_logs.push_back("Connecting to device at: " + state.device_path);
+        onOpenDevice(openEvent);
     }
 }
 
