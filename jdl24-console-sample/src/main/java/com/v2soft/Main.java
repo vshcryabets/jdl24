@@ -2,6 +2,8 @@ package com.v2soft;
 
 import com.v2soft.jdl24.Dl24Controller;
 import com.v2soft.jdl24.Dl24ControllerImpl;
+import com.v2soft.jdl24.SerialPortSourceImpl;
+import com.v2soft.jdl24.Source;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {
@@ -9,8 +11,9 @@ public class Main {
 //        for (var port: ports) {
 //            System.out.println("Port=" + port.getDescriptivePortName() + "  " + port.getSystemPortName());
 //        }
-        Dl24Controller ctrl = new Dl24ControllerImpl();
-        if (!ctrl.connect("/dev/ttyUSB0")) {
+        Source source = new SerialPortSourceImpl("/dev/ttyUSB0");
+        Dl24Controller ctrl = new Dl24ControllerImpl(source);
+        if (!ctrl.connect()) {
             System.out.println("Can't open port");
             System.exit(1);
         }
