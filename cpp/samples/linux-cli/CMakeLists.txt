@@ -10,6 +10,7 @@ target_sources(dl24-linux-cli
         src/main.cpp
         src/SampleDl24App.cpp
         src/viewmodel.cpp
+        src/CurrentEditorBase.cpp
     )
 
 target_include_directories(dl24-linux-cli PRIVATE

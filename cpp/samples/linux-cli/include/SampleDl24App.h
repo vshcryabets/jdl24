@@ -20,6 +20,9 @@ private:
 
     std::mutex state_mutex_;
     std::vector<std::string> menu_entries_;
+
+    int current_value_cA = 150;
+    int cutoff_voltage_mV = 270;
 public:
     SampleDl24App(ViewModel &viewModel);
     ~SampleDl24App();
